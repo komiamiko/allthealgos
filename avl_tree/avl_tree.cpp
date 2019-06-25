@@ -42,12 +42,12 @@ namespace avl {
     struct monostate {
         monostate();
         template <typename T> monostate(const T&);
-        template <typename T> monostate operator () (const T&);
+        template <typename T> monostate operator () (const T&) const;
     };
 
     monostate::monostate() {}
     template <typename T> monostate::monostate(const T& t) {}
-    template <typename T> monostate monostate::operator () (const T&) {return monostate();}
+    template <typename T> monostate monostate::operator () (const T&) const {return monostate();}
     bool constexpr operator == (const monostate& lhs, const monostate& rhs) noexcept {return true;}
     bool constexpr operator >= (const monostate& lhs, const monostate& rhs) noexcept {return true;}
     bool constexpr operator <= (const monostate& lhs, const monostate& rhs) noexcept {return true;}
@@ -120,7 +120,23 @@ namespace avl {
         char balance;
         [[no_unique_address]] _Range_Type_Intermediate subrange;
     public:
-        friend _Size avl::avl_node_size(avl_node*);
+        avl_node(const _Element& i_value, const _Range_Type_Intermediate& i_subrange) {
+            left = nullptr;
+            value = i_value;
+            right = nullptr;
+            size = _Size(1);
+            balance = char(0);
+            subrange = i_subrange;
+        }
+        template <
+    typename _Element_2,
+    typename _Size_2,
+    typename _Range_Type_Intermediate_2
+    > friend _Size_2 avl::avl_node_size(avl_node<
+    _Element_2,
+    _Size_2,
+    _Range_Type_Intermediate_2
+    >*);
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
@@ -128,33 +144,33 @@ namespace avl {
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > avl_node* rotate_left();
+        > avl_node* rotate_left(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb);
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > avl_node* rotate_right();
+        > avl_node* rotate_right(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb);
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > avl_node* ensure_not_right_heavy();
+        > avl_node* ensure_not_right_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb);
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > avl_node* ensure_not_left_heavy();
+        > avl_node* ensure_not_left_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb);
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > avl_node* rebalance_right_heavy();
+        > avl_node* rebalance_right_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb);
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > avl_node* rebalance_left_heavy();
+        > avl_node* rebalance_left_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb);
     };
 
     template <
     typename _Element,
-    typename _Size = std::size_t,
-    typename _Range_Type_Intermediate = monostate
+    typename _Size,
+    typename _Range_Type_Intermediate
     > _Size avl_node_size(avl_node<_Element,_Size,_Range_Type_Intermediate>* node) {
         if(node == nullptr)return 0;
         return node->size;
@@ -176,13 +192,67 @@ namespace avl {
         size = _Size(1);
         subrange = _rpre(value);
         if(left != nullptr){
-            size += left->size;
+            size = left->size + size;
             subrange = _rcomb(left->subrange, subrange);
         }
         if(right != nullptr){
-            size += right->size;
+            size = size + right->size;
             subrange = _rcomb(subrange, right->subrange);
         }
+    }
+
+    template <
+    typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate
+    >
+    template <
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >* avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >::rotate_left(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb) {
+        avl_node* pivot = this->right;
+        this->right = pivot->left;
+        pivot->left = this;
+        this->balance -= 1 + std::max(char(0), pivot->balance);
+        pivot->balance -= 1 - std::min(char(0), this->balance);
+        this->update(_rpre, _rcomb);
+        pivot->update(_rpre, _rcomb);
+        return pivot;
+    }
+
+    template <
+    typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate
+    >
+    template <
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >* avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >::rotate_right(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb) {
+        avl_node* pivot = this->left;
+        this->left = pivot->right;
+        pivot->right = this;
+        this->balance += 1 - std::min(char(0), pivot->balance);
+        pivot->balance += 1 + std::max(char(0), this->balance);
+        this->update(_rpre, _rcomb);
+        pivot->update(_rpre, _rcomb);
+        return pivot;
     }
 
     template <
@@ -208,3 +278,10 @@ namespace avl {
 }
 
 #endif
+
+// TODO remove test main when we're sure it compiles and runs fine
+#include <iostream>
+int main(){
+    avl::avl_node<int,int,int> node(1000,1000);
+    std::cout << avl::avl_node_size(&node);
+}
