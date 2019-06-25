@@ -28,9 +28,10 @@
 #define _AVL_TREE_H
 
 #include <algorithm>
+#include <functional>
 
 namespace avl {
-    
+
     /**
      * The empty 0 sized struct.
      * There's lots of reimplementations of this struct out there,
@@ -43,7 +44,7 @@ namespace avl {
         template <typename T> monostate(const T&);
         template <typename T> monostate operator () (const T&);
     };
-    
+
     monostate::monostate() {}
     template <typename T> monostate::monostate(const T& t) {}
     template <typename T> monostate monostate::operator () (const T&) {return monostate();}
@@ -58,54 +59,54 @@ namespace avl {
     monostate const operator * (const monostate& lhs, const monostate& rhs) noexcept {return monostate();}
     monostate const operator | (const monostate& lhs, const monostate& rhs) noexcept {return monostate();}
     monostate const operator & (const monostate& lhs, const monostate& rhs) noexcept {return monostate();}
-    
+
     /**
      * One of the basic mergers: never merges
      */
     struct no_merge {
         template <typename T> bool operator () (T&, const T&);
     };
-    
+
     template <typename T> bool no_merge::operator () (T& to, const T& from) {
         return false;
     }
-    
+
     /**
      * One of the basic mergers: merge if equal
      */
     struct merge_if_equal {
         template <typename T> bool operator () (T&, const T&);
     };
-    
+
     template <typename T> bool merge_if_equal::operator () (T& to, const T& from) {
         return to == from;
     }
-    
+
     /**
      * One of the less basic mergers: if equal, merge counter
      */
     struct merge_count {
         template <typename T, typename C> bool operator () (std::pair<T,C>&, const std::pair<T,C>&);
     };
-    
+
     template <typename T, typename C> bool merge_count::operator () (std::pair<T,C>& to, const std::pair<T,C>& from) {
         if(to != from)return false;
         to.second += from.second;
         return true;
     }
-    
+
     template <
     typename _Element,
     typename _Size = std::size_t,
     typename _Range_Type_Intermediate = monostate
     > class avl_node;
-    
+
     template <
     typename _Element,
     typename _Size,
     typename _Range_Type_Intermediate
     > _Size avl_node_size(avl_node<_Element,_Size,_Range_Type_Intermediate>* node);
-    
+
     template <
     typename _Element,
     typename _Size,
@@ -123,33 +124,33 @@ namespace avl {
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > friend void update(const _Range_Preprocess&,const _Range_Combine&);
+        > void update(const _Range_Preprocess&,const _Range_Combine&);
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > friend avl_node* rotate_left();
+        > avl_node* rotate_left();
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > friend avl_node* rotate_right();
+        > avl_node* rotate_right();
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > friend avl_node* ensure_not_right_heavy();
+        > avl_node* ensure_not_right_heavy();
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > friend avl_node* ensure_not_left_heavy();
+        > avl_node* ensure_not_left_heavy();
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > friend avl_node* rebalance_right_heavy();
+        > avl_node* rebalance_right_heavy();
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
-        > friend avl_node* rebalance_left_heavy();
+        > avl_node* rebalance_left_heavy();
     };
-    
+
     template <
     typename _Element,
     typename _Size = std::size_t,
@@ -158,7 +159,7 @@ namespace avl {
         if(node == nullptr)return 0;
         return node->size;
     }
-    
+
     template <
     typename _Element,
     typename _Size,
@@ -183,7 +184,7 @@ namespace avl {
             subrange = _rcomb(subrange, right->subrange);
         }
     }
-    
+
     template <
     typename _Element,
     typename _Element_Compare = std::less<_Element>,
@@ -203,7 +204,7 @@ namespace avl {
         _Range_Type_Intermediate
         > *root;
     };
-    
+
 }
 
 #endif
