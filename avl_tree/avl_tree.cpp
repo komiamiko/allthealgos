@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <type_traits>
 
 namespace avl {
 
@@ -361,6 +362,14 @@ namespace avl {
         _Size,
         _Range_Type_Intermediate
         > *root;
+        avl_tree();
+        ~avl_tree();
+        std::size_t size();
+        _Element get_item(std::size_t);
+        std::result_of<_Range_Postprocess(_Range_Type_Intermediate)> get_range(std::size_t, std::size_t);
+        void insert(std::size_t, _Element);
+        _Element remove(std::size_t);
+        _Element replace(std::size_t, _Element);
     };
 
 }
