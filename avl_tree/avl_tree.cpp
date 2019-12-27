@@ -346,6 +346,57 @@ namespace avl {
 
     template <
     typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate,
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > std::pair<avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >*, bool> avl_node_insert_at_index(avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >* node, _Size index, _Element value,
+                              const _Range_Preprocess& _rpre,
+                              const _Range_Combine& _rcomb) {
+        if(node == nullptr){
+            node = new avl_node<_Element,_Size,_Range_Type_Intermediate>(value,_rpre(value));
+            return std::make_pair(node, true);
+        }
+        _Size left_size = avl_node_size(node->left);
+        if(index <= left_size){
+            auto partial = avl_node_insert_at_index(node->left,index,value,_rpre,_rcomb);
+            node->left = partial.first;
+            bool taller = partial.second;
+            node->balance -= taller;
+            if(!taller || node->balance==0){
+                node->update(_rpre,_rcomb);
+                return std::make_pair(node,false);
+            }else if(node->balance==-1){
+                node->update(_rpre,_rcomb);
+                return std::make_pair(node,true);
+            }
+            return std::make_pair(node->rebalance_left_heavy(_rpre, _rcomb),false);
+        }else{
+            auto partial = avl_node_insert_at_index(node->right,index-(avl_node_size(node->left)+1),value,_rpre,_rcomb);
+            node->right = partial.first;
+            bool taller = partial.second;
+            node->balance += taller;
+            if(!taller || node->balance==0){
+                node->update(_rpre,_rcomb);
+                return std::make_pair(node,false);
+            }else if(node->balance==1){
+                node->update(_rpre,_rcomb);
+                return std::make_pair(node,true);
+            }
+            return std::make_pair(node->rebalance_right_heavy(_rpre, _rcomb),false);
+        }
+    }
+
+    template <
+    typename _Element,
     typename _Element_Compare = std::less<_Element>,
     typename _Size = std::size_t,
     typename _Size_Compare = std::less<_Size>,
