@@ -12,6 +12,8 @@ The file `avl_tree.cpp` is a self contained AVL tree data structure library, all
 
 The base `avl_tree` class is quite customizable, and can be made to support various range operations and behave like a list, set, or other data structure. However, it takes some work to get running.
 
+**IMPORTANT**: This library uses some features and standard library contents which were added in C++20. At the time of writing (late 2019), your compiler may not have support for these, and be unable to compile the library. If there is demand for it, we will make a workaround to support older versions of C++, though the performance may be degraded.
+
 ## Why use AVL Trees?
 
 Lists are sequences of items

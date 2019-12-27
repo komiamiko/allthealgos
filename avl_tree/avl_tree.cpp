@@ -1,10 +1,6 @@
 /*
  * An AVL tree implementation and some common collection types based on it.
- * Included collections and what they can be used as drop-in replacements for:
- * - List (vector)
- * - Set (set)
- * - Bag (multiset)
- * - Map (map)
+ * Includes drop-in replacements for vector, set, multiset, and map.
  * This AVL tree implementation can support additional features optionally:
  * - Indexable
  * - Ordered
@@ -59,6 +55,14 @@ namespace avl {
     monostate const operator * (const monostate& lhs, const monostate& rhs) noexcept {return monostate();}
     monostate const operator | (const monostate& lhs, const monostate& rhs) noexcept {return monostate();}
     monostate const operator & (const monostate& lhs, const monostate& rhs) noexcept {return monostate();}
+
+    /**
+     * Identity function. It's in std::functional as of C++20, but it's currently 2019 and support is still on its way. For the time being, we use this as a drop-in replacement.
+     * It's semantically not exactly the same (this one is jankier for sure) but it does the job.
+     */
+    struct identity {
+        template <typename T> T operator () (const T& value){return value;}
+    };
 
     /**
      * One of the basic mergers: never merges
@@ -257,6 +261,90 @@ namespace avl {
 
     template <
     typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate
+    >
+    template <
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >* avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >::ensure_not_right_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb) {
+        if(this->balance<=0)return this;
+        return this->rotate_left(_rpre,_rcomb);
+    }
+
+    template <
+    typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate
+    >
+    template <
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >* avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >::ensure_not_left_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb) {
+        if(this->balance>=0)return this;
+        return this->rotate_right(_rpre,_rcomb);
+    }
+
+    template <
+    typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate
+    >
+    template <
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >* avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >::rebalance_right_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb) {
+        if(this->right != nullptr)this->right = this->right->ensure_not_left_heavy(_rpre, _rcomb);
+        return this->rotate_left(_rpre, _rcomb);
+    }
+
+    template <
+    typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate
+    >
+    template <
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >* avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >::rebalance_left_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb) {
+        if(this->left != nullptr)this->left = this->left->ensure_not_right_heavy(_rpre, _rcomb);
+        return this->rotate_right(_rpre, _rcomb);
+    }
+
+    template <
+    typename _Element,
     typename _Element_Compare = std::less<_Element>,
     typename _Size = std::size_t,
     typename _Size_Compare = std::less<_Size>,
@@ -264,7 +352,7 @@ namespace avl {
     typename _Range_Preprocess = monostate,
     typename _Range_Type_Intermediate = monostate,
     typename _Range_Combine = std::plus<_Range_Type_Intermediate>,
-    typename _Range_Postprocess = monostate,
+    typename _Range_Postprocess = identity,
     typename _Alloc = std::allocator<_Element>
     > class avl_tree {
     private:
