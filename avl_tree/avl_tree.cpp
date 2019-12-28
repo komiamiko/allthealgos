@@ -61,8 +61,8 @@ namespace avl {
      * Identity function. It's in std::functional as of C++20, but it's currently 2019 and support is still on its way. For the time being, we use this as a drop-in replacement.
      * It's semantically not exactly the same (this one is jankier for sure) but it does the job.
      */
-    struct identity {
-        template <typename T> T operator () (const T& value){return value;}
+    template <typename T> struct identity {
+        const T& operator() (const T& value) const { return value; }
     };
 
     /**
@@ -106,11 +106,30 @@ namespace avl {
     typename _Range_Type_Intermediate = monostate
     > class avl_node;
 
+    // forward declarations for helper functions
+
     template <
     typename _Element,
     typename _Size,
     typename _Range_Type_Intermediate
     > _Size avl_node_size(avl_node<_Element,_Size,_Range_Type_Intermediate>* node);
+
+    template <
+    typename _Element_2,
+    typename _Size_2,
+    typename _Range_Type_Intermediate_2,
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > std::pair<avl_node<
+    _Element_2,
+    _Size_2,
+    _Range_Type_Intermediate_2
+    >*, bool> avl_node_insert_at_index(avl_node<
+    _Element_2,
+    _Size_2,
+    _Range_Type_Intermediate_2>*, _Size_2, _Element_2, const _Range_Preprocess&, const _Range_Combine&);
+
+    // declaration for avl_node
 
     template <
     typename _Element,
@@ -133,6 +152,9 @@ namespace avl {
             balance = char(0);
             subrange = i_subrange;
         }
+        
+        // these helper functions are friends
+        
         template <
     typename _Element_2,
     typename _Size_2,
@@ -142,6 +164,24 @@ namespace avl {
     _Size_2,
     _Range_Type_Intermediate_2
     >*);
+        
+        template <
+        typename _Element_2,
+        typename _Size_2,
+        typename _Range_Type_Intermediate_2,
+        typename _Range_Preprocess,
+        typename _Range_Combine
+        > friend std::pair<avl_node<
+        _Element_2,
+        _Size_2,
+        _Range_Type_Intermediate_2
+        >*, bool> avl::avl_node_insert_at_index(avl_node<
+        _Element_2,
+        _Size_2,
+        _Range_Type_Intermediate_2>*, _Size_2, _Element_2, const _Range_Preprocess&, const _Range_Combine&);
+        
+        // these are our methods
+        
         template <
         typename _Range_Preprocess,
         typename _Range_Combine
@@ -404,7 +444,7 @@ namespace avl {
     typename _Range_Preprocess = monostate,
     typename _Range_Type_Intermediate = monostate,
     typename _Range_Combine = std::plus<_Range_Type_Intermediate>,
-    typename _Range_Postprocess = identity,
+    typename _Range_Postprocess = identity<_Range_Type_Intermediate>,
     typename _Alloc = std::allocator<_Element>
     > class avl_tree {
     private:
@@ -430,6 +470,8 @@ namespace avl {
 // TODO remove test main when we're sure it compiles and runs fine
 #include <iostream>
 int main(){
-    avl::avl_node<int,int,int> node(1000,1000);
-    std::cout << avl::avl_node_size(&node);
+    avl::avl_node<int,int,int>* node = new avl::avl_node<int,int,int>(100,100);
+    std::cout << avl::avl_node_size(node) << std::endl;
+    node = avl::avl_node_insert_at_index(node, 0, 200, avl::identity<int>(), std::plus<int>()).first;
+    std::cout << avl::avl_node_size(node) << std::endl;
 }
