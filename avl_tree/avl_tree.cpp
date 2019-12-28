@@ -27,6 +27,7 @@
 #include <functional>
 #include <type_traits>
 #include <memory>
+#include <stdexcept>
 
 namespace avl {
 
@@ -150,6 +151,18 @@ namespace avl {
     _Size_2,
     _Range_Type_Intermediate_2>*, _Element_2, const _Compare&, const _Merge&, const _Range_Preprocess&, const _Range_Combine&, _Alloc);
 
+    template <
+    typename _Element_2,
+    typename _Size_2,
+    typename _Range_Type_Intermediate_2,
+    typename _Range_Preprocess,
+    typename _Range_Combine,
+    typename _Alloc
+    > std::tuple<avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*,bool,_Element_2> avl_node_remove_at_index(avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*, _Size_2,
+      const _Range_Preprocess& ,
+      const _Range_Combine&,
+      _Alloc);
+
     // declaration for avl_node
 
     template <
@@ -221,6 +234,18 @@ namespace avl {
         _Size_2,
         _Range_Type_Intermediate_2>*, _Element_2, const _Compare&, const _Merge&, const _Range_Preprocess&, const _Range_Combine&, _Alloc);
         
+        template <
+        typename _Element_2,
+        typename _Size_2,
+        typename _Range_Type_Intermediate_2,
+        typename _Range_Preprocess,
+        typename _Range_Combine,
+        typename _Alloc
+        > friend std::tuple<avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*,bool,_Element_2> avl::avl_node_remove_at_index(avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*, _Size_2,
+          const _Range_Preprocess& ,
+          const _Range_Combine&,
+          _Alloc);
+        
         // these are our methods
         
         template <
@@ -253,6 +278,10 @@ namespace avl {
         > avl_node* rebalance_left_heavy(const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb);
     };
 
+    /**
+     * Get the number of nodes in a subtree.
+     * A subtree represented by the null pointer is an empty tree, so its size is 0.
+     */
     template <
     typename _Element,
     typename _Size,
@@ -262,6 +291,9 @@ namespace avl {
         return node->size;
     }
 
+    /**
+     * Updates size and range intermediate values at this node. Assumes its children (if they exist) already have correct values.
+     */
     template <
     typename _Element,
     typename _Size,
@@ -287,6 +319,11 @@ namespace avl {
         }
     }
 
+    /**
+     * Performs a left rotation on this subtree.
+     * Will also update the sizes and range intermediate values, so if you know a tree rotation is needed,
+     * you can avoid explicitly calling update (the freshly updated values would have been discarded anyway, and this method will make the correct updates after performing the rotation)
+     */
     template <
     typename _Element,
     typename _Size,
@@ -314,6 +351,9 @@ namespace avl {
         return pivot;
     }
 
+    /**
+     * The mirrored version of rotate_left. See docs for rotate_left.
+     */
     template <
     typename _Element,
     typename _Size,
@@ -341,6 +381,9 @@ namespace avl {
         return pivot;
     }
 
+    /**
+     * If the subtree is right heavy (right subtree is taller than left), does a left rotation to make it not right heavy anymore.
+     */
     template <
     typename _Element,
     typename _Size,
@@ -362,6 +405,9 @@ namespace avl {
         return this->rotate_left(_rpre,_rcomb);
     }
 
+    /**
+     * Mirrored version of ensure_not_right_heavy.
+     */
     template <
     typename _Element,
     typename _Size,
@@ -383,6 +429,9 @@ namespace avl {
         return this->rotate_right(_rpre,_rcomb);
     }
 
+    /**
+     * Rebalances the tree when the only imbalance is at this node and its balance factor is 2. (overly right heavy)
+     */
     template <
     typename _Element,
     typename _Size,
@@ -404,6 +453,9 @@ namespace avl {
         return this->rotate_left(_rpre, _rcomb);
     }
 
+    /**
+     * Mirrored version of rebalance_right_heavy.
+     */
     template <
     typename _Element,
     typename _Size,
@@ -557,6 +609,97 @@ namespace avl {
         }
     }
 
+    /**
+     * Remove the node at a certain index.
+     * Return tuple is (root of the subtree, whether it got shorter, the removed value)
+     */
+    template <
+    typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate,
+    typename _Range_Preprocess,
+    typename _Range_Combine,
+    typename _Alloc
+    > std::tuple<avl_node<_Element,_Size,_Range_Type_Intermediate>*,bool,_Element> avl_node_remove_at_index(avl_node<_Element,_Size,_Range_Type_Intermediate>* node, _Size index,
+      const _Range_Preprocess& _rpre,
+      const _Range_Combine& _rcomb,
+      _Alloc _alloc) {
+        if(node==nullptr) [[unlikely]] {
+            throw std::out_of_range("AVL tree operation remove at index tried to remove from an empty subtree. This happens when the index is outside of the range of valid indices for this tree.");
+        }
+        _Size left_size = avl_node_size(node->left);
+        if(index == left_size){
+            // we must delete this node
+            _Element result = node->value;
+            if(node->left == nullptr && node->right == nullptr){
+                _alloc.destroy(node);
+                _alloc.deallocate(node,1);
+                return std::make_tuple(nullptr,true,result);
+            }
+            if(node->left == nullptr){
+                auto child = node->right;
+                _alloc.destroy(node);
+                _alloc.deallocate(node,1);
+                return std::make_tuple(child,true,result);
+            }
+            if(node->right == nullptr){
+                auto child = node->left;
+                _alloc.destroy(node);
+                _alloc.deallocate(node,1);
+                return std::make_tuple(child,true,result);
+            }
+            auto partial = avl_node_remove_at_index(node->right, 0, _rpre, _rcomb, _alloc);
+            node->right = std::get<0>(partial);
+            bool shorter = std::get<1>(partial);
+            node->value = std::get<2>(partial);
+            node->balance -= shorter;
+            if(!shorter || node->balance == -1){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,false,result);
+            }else if(node->balance == 0){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,true,result);
+            }
+            node = node->rebalance_left_heavy(_rpre, _rcomb);
+            shorter = node->balance == 0;
+            return std::make_tuple(node,shorter,result);
+        }else if(index < left_size){
+            // it's on the left
+            auto partial = avl_node_remove_at_index(node->left, index, _rpre, _rcomb, _alloc);
+            node->left = std::get<0>(partial);
+            bool shorter = std::get<1>(partial);
+            _Element result = std::get<2>(partial);
+            node->balance += shorter;
+            if(!shorter || node->balance == 1){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,false,result);
+            }else if(node->balance == 0){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,true,result);
+            }
+            node = node->rebalance_right_heavy(_rpre, _rcomb);
+            shorter = node->balance == 0;
+            return std::make_tuple(node,shorter,result);
+        }else{
+            // it's on the right
+            auto partial = avl_node_remove_at_index(node->right, index - (left_size+1), _rpre, _rcomb, _alloc);
+            node->right = std::get<0>(partial);
+            bool shorter = std::get<1>(partial);
+            _Element result = std::get<2>(partial);
+            node->balance -= shorter;
+            if(!shorter || node->balance == -1){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,false,result);
+            }else if(node->balance == 0){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,true,result);
+            }
+            node = node->rebalance_left_heavy(_rpre, _rcomb);
+            shorter = node->balance == 0;
+            return std::make_tuple(node,shorter,result);
+        }
+    }
+
     // the avl tree class
 
     template <
@@ -576,6 +719,13 @@ namespace avl {
         _Size,
         _Range_Type_Intermediate
         > *root;
+        [[no_unique_address]] _Element_Compare _less;
+        [[no_unique_address]] _Merge _merge;
+        [[no_unique_address]] _Range_Preprocess _rpre;
+        [[no_unique_address]] _Range_Combine _rcomb;
+        [[no_unique_address]] _Range_Postprocess _rpost;
+        [[no_unique_address]] _Alloc _alloc;
+    public:
         avl_tree();
         ~avl_tree();
         std::size_t size();
@@ -601,5 +751,8 @@ int main(){
     std::cout << avl::avl_node_size(node) << std::endl;
     // test some insertion ordered
     node = std::get<0>(avl::avl_node_insert_ordered(node, 100, std::less<int>(), avl::no_merge<int>(), avl::identity<int>(), std::plus<int>(), std::allocator<avl::avl_node<int,int,int>>()));
+    std::cout << avl::avl_node_size(node) << std::endl;
+    // test some removal
+    node = std::get<0>(avl::avl_node_remove_at_index(node, 1, avl::identity<int>(), std::plus<int>(), std::allocator<avl::avl_node<int,int,int>>()));
     std::cout << avl::avl_node_size(node) << std::endl;
 }
