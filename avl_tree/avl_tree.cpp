@@ -62,7 +62,7 @@ namespace avl {
      * It's semantically not exactly the same (this one is jankier for sure) but it does the job.
      */
     template <typename T> struct identity {
-        const T& operator() (const T& value) const { return value; }
+        const T& operator() (const T& value) const noexcept { return value; }
     };
 
     /**
@@ -129,6 +129,22 @@ namespace avl {
     _Size_2,
     _Range_Type_Intermediate_2>*, _Size_2, _Element_2, const _Range_Preprocess&, const _Range_Combine&);
 
+    template <
+    typename _Element_2,
+    typename _Size_2,
+    typename _Range_Type_Intermediate_2,
+    typename _Compare,
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > std::tuple<avl_node<
+    _Element_2,
+    _Size_2,
+    _Range_Type_Intermediate_2
+    >*, bool, _Size_2> avl_node_insert_ordered(avl_node<
+    _Element_2,
+    _Size_2,
+    _Range_Type_Intermediate_2>*, _Element_2, const _Compare&, const _Range_Preprocess&, const _Range_Combine&);
+
     // declaration for avl_node
 
     template <
@@ -179,6 +195,22 @@ namespace avl {
         _Element_2,
         _Size_2,
         _Range_Type_Intermediate_2>*, _Size_2, _Element_2, const _Range_Preprocess&, const _Range_Combine&);
+        
+        template <
+        typename _Element_2,
+        typename _Size_2,
+        typename _Range_Type_Intermediate_2,
+        typename _Compare,
+        typename _Range_Preprocess,
+        typename _Range_Combine
+        > friend std::tuple<avl_node<
+        _Element_2,
+        _Size_2,
+        _Range_Type_Intermediate_2
+        >*, bool, _Size_2> avl::avl_node_insert_ordered(avl_node<
+        _Element_2,
+        _Size_2,
+        _Range_Type_Intermediate_2>*, _Element_2, const _Compare&, const _Range_Preprocess&, const _Range_Combine&);
         
         // these are our methods
         
@@ -384,6 +416,10 @@ namespace avl {
         return this->rotate_right(_rpre, _rcomb);
     }
 
+    /**
+     * Inserts the element just before the element at a specific index.
+     * Return tuple is (new root, whether it got taller)
+     */
     template <
     typename _Element,
     typename _Size,
@@ -435,6 +471,64 @@ namespace avl {
         }
     }
 
+    /**
+     * Inserts the element where it belongs using the given less than function (compare).
+     * This could be done in separate stages with finding the insertion index and then inserting there,
+     * but a fused find and insert is faster.
+     * Insertion index will be the leftmost possible, so it will be to the left of all identical values.
+     * Return type is (new root, whether it got taller, insertion index used)
+     */
+    template <
+    typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate,
+    typename _Compare,
+    typename _Range_Preprocess,
+    typename _Range_Combine
+    > std::tuple<avl_node<
+    _Element,
+    _Size,
+    _Range_Type_Intermediate
+    >*, bool, _Size> avl_node_insert_ordered(avl_node<
+    _Element,
+    _Size, _Range_Type_Intermediate>* node, _Element value, const _Compare& _less, const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb) {
+        if(node == nullptr){
+            node = new avl_node<_Element,_Size,_Range_Type_Intermediate>(value,_rpre(value));
+            return std::make_tuple(node, true, 0);
+        }
+        if(!_less(node->value,value)){
+            auto partial = avl_node_insert_ordered(node->left,value,_less,_rpre,_rcomb);
+            node->left = std::get<0>(partial);
+            bool taller = std::get<1>(partial);
+            _Size index = std::get<2>(partial);
+            node->balance -= taller;
+            if(!taller || node->balance==0){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,false,index);
+            }else if(node->balance==-1){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,true,index);
+            }
+            return std::make_tuple(node->rebalance_left_heavy(_rpre, _rcomb),false,index);
+        }else{
+            auto partial = avl_node_insert_ordered(node->right,value,_less,_rpre,_rcomb);
+            node->right = std::get<0>(partial);
+            bool taller = std::get<1>(partial);
+            _Size index = std::get<2>(partial);
+            node->balance += taller;
+            if(!taller || node->balance==0){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,false,index);
+            }else if(node->balance==1){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,true,index);
+            }
+            return std::make_tuple(node->rebalance_right_heavy(_rpre, _rcomb),false,index);
+        }
+    }
+
+    // the avl tree class
+
     template <
     typename _Element,
     typename _Element_Compare = std::less<_Element>,
@@ -470,8 +564,13 @@ namespace avl {
 // TODO remove test main when we're sure it compiles and runs fine
 #include <iostream>
 int main(){
-    avl::avl_node<int,int,int>* node = new avl::avl_node<int,int,int>(100,100);
+    // test node instantiation
+    avl::avl_node<int,int,int>* node = new avl::avl_node<int,int,int>(300,300);
     std::cout << avl::avl_node_size(node) << std::endl;
-    node = avl::avl_node_insert_at_index(node, 0, 200, avl::identity<int>(), std::plus<int>()).first;
+    // test some insertion by index
+    node = avl::avl_node_insert_at_index(node, 0, 100, avl::identity<int>(), std::plus<int>()).first;
+    std::cout << avl::avl_node_size(node) << std::endl;
+    // test some insertion ordered
+    node = std::get<0>(avl::avl_node_insert_ordered(node, 100, std::less<int>(), avl::identity<int>(), std::plus<int>()));
     std::cout << avl::avl_node_size(node) << std::endl;
 }
