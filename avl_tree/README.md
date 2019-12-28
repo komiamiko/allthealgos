@@ -14,6 +14,26 @@ The base `avl_tree` class is quite customizable, and can be made to support vari
 
 **IMPORTANT**: This library uses some features and standard library contents which were added in C++20. At the time of writing (late 2019), your compiler may not have support for these, and be unable to compile the library. If there is demand for it, we will make a workaround to support older versions of C++, though the performance may be degraded.
 
+#### Advanced usage
+
+On closer inspection of the `avl_tree` class' template typing, you will see:
+
+- `_Element` which is used to determine what data type the nodes of the tree will store.
+- `_Element_Compare` which is used to determine ordering of values, where it matters. Useful for maintaining a sorted list, sorted set, etc.
+- `_Size` which is used for the size type. In general a `std::size_t` should work well for this, though if you are working with small trees it may reduce the memory footprint to use a smaller type, say, `uint16_t`.
+- `_Merge` which will either return false or merge its right argument into its left argument (which are both references). For performance reasons, the first successful merge will always be taken where applicable, which means that if there are multiple nodes which are capable of accepting a merge, there is no guarantee made on which will actually be merged into. We ask that the merger is well behaved in the sense that, in such an event, no possible outcome is an invalid tree.
+- `_Range_Preprocess`, `_Range_Type_Intermediate`, `_Range_Combine`, `_Range_Postprocess` used to define the range operations. Each node's value is first put through the `_Range_Preprocess` operation, producing a value of type `_Range_Type_Intermediate`. These are then combined left to right using `_Range_Combine`. As long as that operation is associative, this will be well behaved. The final combined value across a range is put through `_Range_Postprocess` to get the final result of the range query. The reason why `_Range_Type_Intermediate` matters at all is because each node will store one, which is the intermediate result across the range that is the subtree rooted at that node.
+- `_Alloc` is used to manage memory, in place of the standard `new` and `delete`. It can be customized if needed.
+
+You can define all sorts of esoteric data structures. For example, to make a sorted 32-bit integer list where range queries get the difference between the smallest and largest elements, the recipe would look something like this:
+
+- `_Element` as `int32_t`
+- `_Range_Preprocess` as *x ↦ (x, x)*
+- `_Range_Combine` as *(w, x), (y, z) ↦ (min{w, y}, max{x, z})*
+- `_Range_Postprocess` as *(x, y) ↦ y - x*
+
+They're written here mathematically, though they could be written more verbosely as proper C++ callable objects.
+
 ## Why use AVL Trees?
 
 Lists are sequences of items
