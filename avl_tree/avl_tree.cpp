@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <functional>
 #include <type_traits>
+#include <memory>
 
 namespace avl {
 
@@ -120,7 +121,8 @@ namespace avl {
     typename _Range_Type_Intermediate_2,
     typename _Merge,
     typename _Range_Preprocess,
-    typename _Range_Combine
+    typename _Range_Combine,
+    typename _Alloc
     > std::pair<avl_node<
     _Element_2,
     _Size_2,
@@ -128,7 +130,7 @@ namespace avl {
     >*, bool> avl_node_insert_at_index(avl_node<
     _Element_2,
     _Size_2,
-    _Range_Type_Intermediate_2>*, _Size_2, _Element_2, const _Merge&, const _Range_Preprocess&, const _Range_Combine&);
+    _Range_Type_Intermediate_2>*, _Size_2, _Element_2, const _Merge&, const _Range_Preprocess&, const _Range_Combine&, _Alloc);
 
     template <
     typename _Element_2,
@@ -137,7 +139,8 @@ namespace avl {
     typename _Compare,
     typename _Merge,
     typename _Range_Preprocess,
-    typename _Range_Combine
+    typename _Range_Combine,
+    typename _Alloc
     > std::tuple<avl_node<
     _Element_2,
     _Size_2,
@@ -145,7 +148,7 @@ namespace avl {
     >*, bool, _Size_2> avl_node_insert_ordered(avl_node<
     _Element_2,
     _Size_2,
-    _Range_Type_Intermediate_2>*, _Element_2, const _Compare&, const _Merge&, const _Range_Preprocess&, const _Range_Combine&);
+    _Range_Type_Intermediate_2>*, _Element_2, const _Compare&, const _Merge&, const _Range_Preprocess&, const _Range_Combine&, _Alloc);
 
     // declaration for avl_node
 
@@ -189,7 +192,8 @@ namespace avl {
         typename _Range_Type_Intermediate_2,
         typename _Merge,
         typename _Range_Preprocess,
-        typename _Range_Combine
+        typename _Range_Combine,
+        typename _Alloc
         > friend std::pair<avl_node<
         _Element_2,
         _Size_2,
@@ -197,7 +201,7 @@ namespace avl {
         >*, bool> avl::avl_node_insert_at_index(avl_node<
         _Element_2,
         _Size_2,
-        _Range_Type_Intermediate_2>*, _Size_2, _Element_2, const _Merge&, const _Range_Preprocess&, const _Range_Combine&);
+        _Range_Type_Intermediate_2>*, _Size_2, _Element_2, const _Merge&, const _Range_Preprocess&, const _Range_Combine&, _Alloc);
         
         template <
         typename _Element_2,
@@ -206,7 +210,8 @@ namespace avl {
         typename _Compare,
         typename _Merge,
         typename _Range_Preprocess,
-        typename _Range_Combine
+        typename _Range_Combine,
+        typename _Alloc
         > friend std::tuple<avl_node<
         _Element_2,
         _Size_2,
@@ -214,7 +219,7 @@ namespace avl {
         >*, bool, _Size_2> avl::avl_node_insert_ordered(avl_node<
         _Element_2,
         _Size_2,
-        _Range_Type_Intermediate_2>*, _Element_2, const _Compare&, const _Merge&, const _Range_Preprocess&, const _Range_Combine&);
+        _Range_Type_Intermediate_2>*, _Element_2, const _Compare&, const _Merge&, const _Range_Preprocess&, const _Range_Combine&, _Alloc);
         
         // these are our methods
         
@@ -431,7 +436,8 @@ namespace avl {
     typename _Range_Type_Intermediate,
     typename _Merge,
     typename _Range_Preprocess,
-    typename _Range_Combine
+    typename _Range_Combine,
+    typename _Alloc
     > std::pair<avl_node<
     _Element,
     _Size,
@@ -443,10 +449,12 @@ namespace avl {
     >* node, _Size index, _Element value,
                               const _Merge& _merge,
                               const _Range_Preprocess& _rpre,
-                              const _Range_Combine& _rcomb) {
+                              const _Range_Combine& _rcomb,
+                            _Alloc _alloc) {
         // empty node special case
         if(node == nullptr){
-            node = new avl_node<_Element,_Size,_Range_Type_Intermediate>(value,_rpre(value));
+            node = _alloc.allocate(1);
+            _alloc.construct(node, value,_rpre(value));
             return std::make_pair(node, true);
         }
         // attempt merge
@@ -456,7 +464,7 @@ namespace avl {
         // do regular insert
         _Size left_size = avl_node_size(node->left);
         if(index <= left_size){
-            auto partial = avl_node_insert_at_index(node->left,index,value,_merge,_rpre,_rcomb);
+            auto partial = avl_node_insert_at_index(node->left,index,value,_merge,_rpre,_rcomb,_alloc);
             node->left = partial.first;
             bool taller = partial.second;
             node->balance -= taller;
@@ -469,7 +477,7 @@ namespace avl {
             }
             return std::make_pair(node->rebalance_left_heavy(_rpre, _rcomb),false);
         }else{
-            auto partial = avl_node_insert_at_index(node->right,index-(avl_node_size(node->left)+1),value,_merge,_rpre,_rcomb);
+            auto partial = avl_node_insert_at_index(node->right,index-(avl_node_size(node->left)+1),value,_merge,_rpre,_rcomb,_alloc);
             node->right = partial.first;
             bool taller = partial.second;
             node->balance += taller;
@@ -498,17 +506,19 @@ namespace avl {
     typename _Compare,
     typename _Merge,
     typename _Range_Preprocess,
-    typename _Range_Combine
+    typename _Range_Combine,
+    typename _Alloc
     > std::tuple<avl_node<
     _Element,
     _Size,
     _Range_Type_Intermediate
     >*, bool, _Size> avl_node_insert_ordered(avl_node<
     _Element,
-    _Size, _Range_Type_Intermediate>* node, _Element value, const _Compare& _less, const _Merge& _merge, const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb) {
+    _Size, _Range_Type_Intermediate>* node, _Element value, const _Compare& _less, const _Merge& _merge, const _Range_Preprocess& _rpre, const _Range_Combine& _rcomb, _Alloc _alloc) {
         // empty node special case
         if(node == nullptr){
-            node = new avl_node<_Element,_Size,_Range_Type_Intermediate>(value,_rpre(value));
+            node = _alloc.allocate(1);
+            _alloc.construct(node, value,_rpre(value));
             return std::make_tuple(node, true, 0);
         }
         // attempt merge
@@ -517,7 +527,7 @@ namespace avl {
         }
         // insert normally
         if(!_less(node->value,value)){
-            auto partial = avl_node_insert_ordered(node->left,value,_less,_merge,_rpre,_rcomb);
+            auto partial = avl_node_insert_ordered(node->left,value,_less,_merge,_rpre,_rcomb,_alloc);
             node->left = std::get<0>(partial);
             bool taller = std::get<1>(partial);
             _Size index = std::get<2>(partial);
@@ -531,7 +541,7 @@ namespace avl {
             }
             return std::make_tuple(node->rebalance_left_heavy(_rpre, _rcomb),false,index);
         }else{
-            auto partial = avl_node_insert_ordered(node->right,value,_less,_merge,_rpre,_rcomb);
+            auto partial = avl_node_insert_ordered(node->right,value,_less,_merge,_rpre,_rcomb,_alloc);
             node->right = std::get<0>(partial);
             bool taller = std::get<1>(partial);
             _Size index = avl_node_size(node->left) + 1 + std::get<2>(partial);
@@ -558,7 +568,7 @@ namespace avl {
     typename _Range_Type_Intermediate = std::result_of<_Range_Preprocess(_Element)>,
     typename _Range_Combine = std::plus<_Range_Type_Intermediate>,
     typename _Range_Postprocess = identity<_Range_Type_Intermediate>,
-    typename _Alloc = std::allocator<_Element>
+    typename _Alloc = std::allocator<avl_node<_Element,_Size,_Range_Type_Intermediate>>
     > class avl_tree {
     private:
         avl_node<
@@ -587,9 +597,9 @@ int main(){
     avl::avl_node<int,int,int>* node = new avl::avl_node<int,int,int>(300,300);
     std::cout << avl::avl_node_size(node) << std::endl;
     // test some insertion by index
-    node = avl::avl_node_insert_at_index(node, 0, 100, avl::no_merge<int>(), avl::identity<int>(), std::plus<int>()).first;
+    node = avl::avl_node_insert_at_index(node, 0, 100, avl::no_merge<int>(), avl::identity<int>(), std::plus<int>(), std::allocator<avl::avl_node<int,int,int>>()).first;
     std::cout << avl::avl_node_size(node) << std::endl;
     // test some insertion ordered
-    node = std::get<0>(avl::avl_node_insert_ordered(node, 100, std::less<int>(), avl::no_merge<int>(), avl::identity<int>(), std::plus<int>()));
+    node = std::get<0>(avl::avl_node_insert_ordered(node, 100, std::less<int>(), avl::no_merge<int>(), avl::identity<int>(), std::plus<int>(), std::allocator<avl::avl_node<int,int,int>>()));
     std::cout << avl::avl_node_size(node) << std::endl;
 }
