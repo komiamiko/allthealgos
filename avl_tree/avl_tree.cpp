@@ -576,7 +576,7 @@ namespace avl {
             }
             return std::make_pair(node->rebalance_left_heavy(_rpre, _rcomb),false);
         }else{
-            auto partial = avl_node_insert_at_index(node->right,index-(avl_node_size(node->left)+1),value,_merge,_rpre,_rcomb,_alloc);
+            auto partial = avl_node_insert_at_index(node->right,index-(avl_node_size(node->left)+_Size(1)),value,_merge,_rpre,_rcomb,_alloc);
             node->right = partial.first;
             bool taller = partial.second;
             node->balance += taller;
@@ -643,7 +643,7 @@ namespace avl {
             auto partial = avl_node_insert_ordered(node->right,value,_less,_merge,_rpre,_rcomb,_alloc);
             node->right = std::get<0>(partial);
             bool taller = std::get<1>(partial);
-            _Size index = avl_node_size(node->left) + 1 + std::get<2>(partial);
+            _Size index = avl_node_size(node->left) + _Size(1) + std::get<2>(partial);
             node->balance += taller;
             if(!taller || node->balance==0){
                 node->update(_rpre,_rcomb);
@@ -729,7 +729,7 @@ namespace avl {
             return std::make_tuple(node,shorter,result);
         }else{
             // it's on the right
-            auto partial = avl_node_remove_at_index(node->right, index - (left_size+1), _rpre, _rcomb, _alloc);
+            auto partial = avl_node_remove_at_index(node->right, index - (left_size+_Size(1)), _rpre, _rcomb, _alloc);
             node->right = std::get<0>(partial);
             bool shorter = std::get<1>(partial);
             _Element result = std::get<2>(partial);
@@ -772,7 +772,85 @@ namespace avl {
         if(node==nullptr){
             return std::make_tuple(node,false,index);
         }
-        
+        if(node->value == value){
+            index = avl_node_size(node->left);
+            // we must delete this node
+            if(node->left == nullptr && node->right == nullptr){
+                _alloc.destroy(node);
+                _alloc.deallocate(node,1);
+                return std::make_tuple(nullptr,true,index);
+            }
+            if(node->left == nullptr){
+                auto child = node->right;
+                _alloc.destroy(node);
+                _alloc.deallocate(node,1);
+                return std::make_tuple(child,true,index);
+            }
+            if(node->right == nullptr){
+                auto child = node->left;
+                _alloc.destroy(node);
+                _alloc.deallocate(node,1);
+                return std::make_tuple(child,true,index);
+            }
+            auto partial = avl_node_remove_at_index(node->right, 0, _rpre, _rcomb, _alloc);
+            node->right = std::get<0>(partial);
+            bool shorter = std::get<1>(partial);
+            node->value = std::get<2>(partial);
+            node->balance -= shorter;
+            if(!shorter || node->balance == -1){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,false,index);
+            }else if(node->balance == 0){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,true,index);
+            }
+            node = node->rebalance_left_heavy(_rpre, _rcomb);
+            shorter = node->balance == 0;
+            return std::make_tuple(node,shorter,index);
+        }else if(_less(value,node->value)){
+            // it's on the left
+            auto partial = avl_node_remove_ordered(node->left, value, _less, _rpre, _rcomb, _alloc);
+            node->left = std::get<0>(partial);
+            bool shorter = std::get<1>(partial);
+            index = std::get<2>(partial);
+            if(!index){
+              // remove did nothing
+              return std::make_tuple(node,false,index);
+            }
+            node->balance += shorter;
+            if(!shorter || node->balance == 1){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,false,index);
+            }else if(node->balance == 0){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,true,index);
+            }
+            node = node->rebalance_right_heavy(_rpre, _rcomb);
+            shorter = node->balance == 0;
+            return std::make_tuple(node,shorter,index);
+        }else{
+            // it's on the right
+            auto partial = avl_node_remove_ordered(node->right, value, _less, _rpre, _rcomb, _alloc);
+            node->right = std::get<0>(partial);
+            bool shorter = std::get<1>(partial);
+            index = std::get<2>(partial);
+            if(!index){
+              // remove did nothing
+              return std::make_tuple(node,false,index);
+            }
+            index = avl_node_size(node->left) + _Size(1) + index.value();
+            node->balance -= shorter;
+            if(!shorter || node->balance == -1){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,false,index);
+            }else if(node->balance == 0){
+                node->update(_rpre,_rcomb);
+                return std::make_tuple(node,true,index);
+            }
+            node = node->rebalance_left_heavy(_rpre, _rcomb);
+            shorter = node->balance == 0;
+            return std::make_tuple(node,shorter,index);
+        }
     }
 
     // the avl tree class
@@ -824,15 +902,23 @@ int main(){
     // c++ version
     std::cout << __cplusplus << std::endl;
     // test node instantiation
+    // (300)
     avl::avl_node<int,int,int>* node = new avl::avl_node<int,int,int>(300,300);
     std::cout << avl::avl_node_size(node) << std::endl;
     // test some insertion by index
+    // (100 300)
     node = avl::avl_node_insert_at_index(node, 0, 100, avl::no_merge<int>(), avl::identity<int>(), std::plus<int>(), std::allocator<avl::avl_node<int,int,int>>()).first;
     std::cout << avl::avl_node_size(node) << std::endl;
     // test some insertion ordered
+    // (100 100 300)
     node = std::get<0>(avl::avl_node_insert_ordered(node, 100, std::less<int>(), avl::no_merge<int>(), avl::identity<int>(), std::plus<int>(), std::allocator<avl::avl_node<int,int,int>>()));
     std::cout << avl::avl_node_size(node) << std::endl;
     // test some removal
+    // (100 300)
     node = std::get<0>(avl::avl_node_remove_at_index(node, 1, avl::identity<int>(), std::plus<int>(), std::allocator<avl::avl_node<int,int,int>>()));
+    std::cout << avl::avl_node_size(node) << std::endl;
+    // test some removal ordered
+    // (100)
+    node = std::get<0>(avl::avl_node_remove_ordered(node, 300, std::less<int>(), avl::identity<int>(), std::plus<int>(), std::allocator<avl::avl_node<int,int,int>>()));
     std::cout << avl::avl_node_size(node) << std::endl;
 }
