@@ -25,9 +25,24 @@
 
 #include <algorithm>
 #include <functional>
+// type_traits: had some changes in C++17
 #include <type_traits>
 #include <memory>
 #include <stdexcept>
+
+#if __cplusplus >= 201703L
+// invoke_result: as of C++17
+#define avl_invoke_result(T,...) std::invoke_result<T,__VA_ARGS__>
+// optional: as of C++17
+#include <optional>
+#define avl_optional std::optional
+#else
+// result_of: before C++17
+#define avl_invoke_result(T,...) std::result_of<T(__VA_ARGS__)>
+// optional: as of C++17
+#include <experimental/optional>
+#define avl_optional std::experimental::optional
+#endif
 
 namespace avl {
 
@@ -163,6 +178,22 @@ namespace avl {
       const _Range_Combine&,
       _Alloc);
 
+    template <
+    typename _Element_2,
+    typename _Size_2,
+    typename _Range_Type_Intermediate_2,
+    typename _Compare,
+    typename _Range_Preprocess,
+    typename _Range_Combine,
+    typename _Alloc
+    >
+    std::tuple<avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*,bool,avl_optional<_Size_2>>
+    avl_node_remove_ordered(avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*, _Element_2,
+      const _Compare&,
+      const _Range_Preprocess&,
+      const _Range_Combine&,
+      _Alloc);
+
     // declaration for avl_node
 
     template <
@@ -243,6 +274,22 @@ namespace avl {
         typename _Alloc
         > friend std::tuple<avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*,bool,_Element_2> avl::avl_node_remove_at_index(avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*, _Size_2,
           const _Range_Preprocess& ,
+          const _Range_Combine&,
+          _Alloc);
+        
+        template <
+        typename _Element_2,
+        typename _Size_2,
+        typename _Range_Type_Intermediate_2,
+        typename _Compare,
+        typename _Range_Preprocess,
+        typename _Range_Combine,
+        typename _Alloc
+        > friend
+        std::tuple<avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*,bool,avl_optional<_Size_2>>
+        avl::avl_node_remove_ordered(avl_node<_Element_2,_Size_2,_Range_Type_Intermediate_2>*, _Element_2,
+          const _Compare&,
+          const _Range_Preprocess&,
           const _Range_Combine&,
           _Alloc);
         
@@ -700,6 +747,34 @@ namespace avl {
         }
     }
 
+    /**
+     * Tries to remove one instance of an item in a sorted collection.
+     * Return tuple is (new subtree root, whether it got shorter, the index where the item was if it was removed)
+     * The optional allows to signal a successful or failed removal operation and also carry information on the index.
+     */
+    template <
+    typename _Element,
+    typename _Size,
+    typename _Range_Type_Intermediate,
+    typename _Compare,
+    typename _Range_Preprocess,
+    typename _Range_Combine,
+    typename _Alloc
+    >
+    std::tuple<avl_node<_Element,_Size,_Range_Type_Intermediate>*,bool,avl_optional<_Size>>
+    avl_node_remove_ordered(avl_node<_Element,_Size,_Range_Type_Intermediate>* node, _Element value,
+      const _Compare& _less,
+      const _Range_Preprocess& _rpre,
+      const _Range_Combine& _rcomb,
+      _Alloc _alloc) {
+        avl_optional<_Size> index;
+        // empty node -> do nothing, report nothing to delete
+        if(node==nullptr){
+            return std::make_tuple(node,false,index);
+        }
+        
+    }
+
     // the avl tree class
 
     template <
@@ -708,7 +783,7 @@ namespace avl {
     typename _Size = std::size_t,
     typename _Merge = no_merge<_Element>,
     typename _Range_Preprocess = monostate,
-    typename _Range_Type_Intermediate = std::result_of<_Range_Preprocess(_Element)>,
+    typename _Range_Type_Intermediate = avl_invoke_result(_Range_Preprocess,_Element),
     typename _Range_Combine = std::plus<_Range_Type_Intermediate>,
     typename _Range_Postprocess = identity<_Range_Type_Intermediate>,
     typename _Alloc = std::allocator<avl_node<_Element,_Size,_Range_Type_Intermediate>>
@@ -738,11 +813,16 @@ namespace avl {
 
 }
 
+#undef avl_invoke_result
+#undef avl_optional
+
 #endif
 
 // TODO remove test main when we're sure it compiles and runs fine
 #include <iostream>
 int main(){
+    // c++ version
+    std::cout << __cplusplus << std::endl;
     // test node instantiation
     avl::avl_node<int,int,int>* node = new avl::avl_node<int,int,int>(300,300);
     std::cout << avl::avl_node_size(node) << std::endl;

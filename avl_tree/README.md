@@ -12,7 +12,7 @@ The file `avl_tree.cpp` is a self contained AVL tree data structure library, all
 
 The base `avl_tree` class is quite customizable, and can be made to support various range operations and behave like a list, set, or other data structure. However, it takes some work to get running.
 
-**IMPORTANT**: This library uses some features and standard library contents which were added in C++20. At the time of writing (late 2019), your compiler may not have support for these, and be unable to compile the library. If there is demand for it, we will make a workaround to support older versions of C++, though the performance may be degraded.
+**IMPORTANT**: This library uses some features and standard library contents which were added in C++20. At the time of writing (late 2019), your compiler may not have support for these, and be unable to compile the library. If there is demand for it, we will make a workaround to support older versions of C++, though the performance may be degraded. Also, some features from C++17 (ex. `std::optional`) are required for this library.
 
 #### Advanced usage
 
@@ -33,6 +33,12 @@ You can define all sorts of esoteric data structures. For example, to make a sor
 - `_Range_Postprocess` as *(x, y) ↦ y - x*
 
 They're written here mathematically, though they could be written more verbosely as proper C++ callable objects.
+
+#### Test coverage
+
+Basic development tests compile correctly and pass fine on:
+
+- clang 7.0.0 with C++14
 
 ## Why use AVL Trees?
 
