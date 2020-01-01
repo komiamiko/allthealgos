@@ -25,14 +25,12 @@ On closer inspection of the `avl_tree` class' template typing, you will see:
 - `_Range_Preprocess`, `_Range_Type_Intermediate`, `_Range_Combine`, `_Range_Postprocess` used to define the range operations. Each node's value is first put through the `_Range_Preprocess` operation, producing a value of type `_Range_Type_Intermediate`. These are then combined left to right using `_Range_Combine`. As long as that operation is associative, this will be well behaved. The final combined value across a range is put through `_Range_Postprocess` to get the final result of the range query. The reason why `_Range_Type_Intermediate` matters at all is because each node will store one, which is the intermediate result across the range that is the subtree rooted at that node.
 - `_Alloc` is used to manage memory, in place of the standard `new` and `delete`. It can be customized if needed.
 
-You can define all sorts of esoteric data structures. For example, to make a sorted 32-bit integer list where range queries get the difference between the smallest and largest elements, the recipe would look something like this:
+You can define all sorts of esoteric data structures, as well as common and useful ones. For example, to make a compressed list where runs of identical elements are stored in one object, the recipe looks something like this:
 
-- `_Element` as `int32_t`
-- `_Range_Preprocess` as *x ↦ (x, x)*
-- `_Range_Combine` as *(w, x), (y, z) ↦ (min{w, y}, max{x, z})*
-- `_Range_Postprocess` as *(x, y) ↦ y - x*
-
-They're written here mathematically, though they could be written more verbosely as proper C++ callable objects.
+- elements are tuples of *(actual list value, number of copies in the run)*
+- merge will merge runs of the same value and add their counters
+- wrapper around the remove operation will decrement a counter and remove the entry if the counter is 0
+- range operation tracks the true size of a sublist, as the AVL tree alone would only know how many runs are in the sublist and not how many elements that's supposed to represent
 
 #### Test coverage
 
