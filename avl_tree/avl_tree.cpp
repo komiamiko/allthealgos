@@ -167,6 +167,11 @@ class avl_node;
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 _Size avl_node_size(avl_node<_Element, _Size, _Range_Type_Intermediate> *node);
 
+template <typename _Element_2, typename _Size_2, typename _Range_Type_Intermediate_2>
+_Element_2
+avl_node_get_at_index(
+    avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2>*, _Size_2);
+
 template <typename _Element_2, typename _Size_2,
           typename _Range_Type_Intermediate_2, typename _Merge,
           typename _Range_Preprocess, typename _Range_Combine, typename _Alloc>
@@ -235,6 +240,11 @@ class avl_node {
             typename _Range_Type_Intermediate_2>
   friend _Size_2 avl::avl_node_size(
       avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *);
+
+  template <typename _Element_2, typename _Size_2, typename _Range_Type_Intermediate_2>
+  friend _Element_2
+  avl::avl_node_get_at_index(
+    avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2>*, _Size_2);
 
   template <typename _Element_2, typename _Size_2,
             typename _Range_Type_Intermediate_2, typename _Merge,
@@ -425,9 +435,43 @@ avl_node<_Element, _Size, _Range_Type_Intermediate>
 }
 
 /**
+ * Gets the element at a specific index.
+ *
+ * Valid range is [0, size of tree)
+ * If the index is outside the valid range, throws a std::out_of_range
+ */
+template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
+_Element
+avl_node_get_at_index(
+    avl_node<_Element, _Size, _Range_Type_Intermediate> *node, _Size index) {
+  if (node == nullptr) [[unlikely]] {
+    throw std::out_of_range(
+      "AVL tree operation get at index tried to get from an empty "
+      "subtree. This happens when the index is outside of the range of "
+      "valid indices for this tree.");
+  }
+  _Size left_size = avl_node_size(node->left);
+  if (index == left_size) {
+    // at this node
+    return node->value;
+  } else if (index < left_size) {
+    // on the left
+    return avl_node_get_at_index(node->left, index);
+  } else {
+    // on the right
+    return avl_node_get_at_index(node->left, index - (left_size + _Size(1)));
+  }
+}
+
+/**
  * Inserts the element just before the element at a specific index.
  * May merge, in which case the tree does not grow.
  * Return tuple is (new root, whether it got taller)
+ *
+ * Valid range is [0, size of tree + 1)
+ * 0 would be just before the first element,
+ * and (size of tree + 1) would be just after the last element.
+ * If the index is outside the valid range, throws a std::out_of_range
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
           typename _Merge, typename _Range_Preprocess, typename _Range_Combine,
@@ -439,6 +483,12 @@ avl_node_insert_at_index(
     const _Range_Combine &_rcomb, _Alloc _alloc) {
   // empty node special case
   if (node == nullptr) {
+    // only valid index for empty tree is 0
+    if (index != _Size(0)) [[unlikely]] {
+      throw std::out_of_range(
+        "AVL tree operation insert at index tried to insert before the"
+        "first valid index or after the last valid index.");
+    }
     node = _alloc.allocate(1);
     _alloc.construct(node, value, _rpre(value));
     return std::make_pair(node, true);
@@ -547,6 +597,9 @@ avl_node_insert_ordered(
  * Remove the node at a certain index.
  * Return tuple is (root of the subtree, whether it got shorter, the removed
  * value)
+ *
+ * Valid range is [0, size of tree)
+ * If the index is outside the valid range, throws a std::out_of_range
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
           typename _Range_Preprocess, typename _Range_Combine, typename _Alloc>
@@ -783,6 +836,8 @@ class avl_tree {
 #endif
 
 // TODO remove test main when we're sure it compiles and runs fine
+// the test main is only to check if the API works at all, it's not a comprehensive unit test
+// it is useful right now for spotting big errors during development
 #include <iostream>
 int main() {
   // c++ version
@@ -791,30 +846,33 @@ int main() {
   // (300)
   avl::avl_node<int, int, int> *node =
       new avl::avl_node<int, int, int>(300, 300);
-  std::cout << avl::avl_node_size(node) << std::endl;
+  std::cout << avl::avl_node_size(node) << " (expected 1)" << std::endl;
   // test some insertion by index
   // (100 300)
   node = avl::avl_node_insert_at_index(
              node, 0, 100, avl::no_merge<int>(), avl::identity<int>(),
              std::plus<int>(), std::allocator<avl::avl_node<int, int, int>>())
              .first;
-  std::cout << avl::avl_node_size(node) << std::endl;
+  std::cout << avl::avl_node_size(node) << " (expected 2)" << std::endl;
   // test some insertion ordered
   // (100 100 300)
   node = std::get<0>(avl::avl_node_insert_ordered(
       node, 100, std::less<int>(), avl::no_merge<int>(), avl::identity<int>(),
       std::plus<int>(), std::allocator<avl::avl_node<int, int, int>>()));
-  std::cout << avl::avl_node_size(node) << std::endl;
+  std::cout << avl::avl_node_size(node) << " (expected 3)" << std::endl;
   // test some removal
   // (100 300)
   node = std::get<0>(avl::avl_node_remove_at_index(
       node, 1, avl::identity<int>(), std::plus<int>(),
       std::allocator<avl::avl_node<int, int, int>>()));
-  std::cout << avl::avl_node_size(node) << std::endl;
+  std::cout << avl::avl_node_size(node) << " (expected 2)" << std::endl;
   // test some removal ordered
   // (100)
   node = std::get<0>(avl::avl_node_remove_ordered(
       node, 300, std::less<int>(), avl::identity<int>(), std::plus<int>(),
       std::allocator<avl::avl_node<int, int, int>>()));
-  std::cout << avl::avl_node_size(node) << std::endl;
+  std::cout << avl::avl_node_size(node) << " (expected 1)" << std::endl;
+  // test some element get
+  // (100)
+  std::cout << avl::avl_node_get_at_index(node, 0) << " (expected 100)" << std::endl;
 }

@@ -32,6 +32,8 @@ You can define all sorts of esoteric data structures, as well as common and usef
 - wrapper around the remove operation will decrement a counter and remove the entry if the counter is 0
 - range operation tracks the true size of a sublist, as the AVL tree alone would only know how many runs are in the sublist and not how many elements that's supposed to represent
 
+Tip: if your element data type is large and expensive to copy, consider using a `std::shared_ptr` of the data as the tree element type instead.
+
 #### Test coverage
 
 Basic development tests compile correctly and pass fine on:
