@@ -168,9 +168,9 @@ template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 _Size avl_node_size(avl_node<_Element, _Size, _Range_Type_Intermediate> *node);
 
 template <typename _Element_2, typename _Size_2, typename _Range_Type_Intermediate_2>
-_Element_2
+const _Element_2&
 avl_node_get_at_index(
-    avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2>*, _Size_2);
+    const avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2>*, _Size_2);
 
 template <typename _Element_2, typename _Size_2,
           typename _Range_Type_Intermediate_2, typename _Merge,
@@ -242,9 +242,9 @@ class avl_node {
       avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *);
 
   template <typename _Element_2, typename _Size_2, typename _Range_Type_Intermediate_2>
-  friend _Element_2
+  friend const _Element_2&
   avl::avl_node_get_at_index(
-    avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2>*, _Size_2);
+    const avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2>*, _Size_2);
 
   template <typename _Element_2, typename _Size_2,
             typename _Range_Type_Intermediate_2, typename _Merge,
@@ -436,14 +436,15 @@ avl_node<_Element, _Size, _Range_Type_Intermediate>
 
 /**
  * Gets the element at a specific index.
+ * (actually, returns a const reference to the element)
  *
  * Valid range is [0, size of tree)
  * If the index is outside the valid range, throws a std::out_of_range
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
-_Element
+const _Element&
 avl_node_get_at_index(
-    avl_node<_Element, _Size, _Range_Type_Intermediate> *node, _Size index) {
+    const avl_node<_Element, _Size, _Range_Type_Intermediate> *node, _Size index) {
   if (node == nullptr) [[unlikely]] {
     throw std::out_of_range(
       "AVL tree operation get at index tried to get from an empty "
