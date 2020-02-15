@@ -211,6 +211,26 @@ avl_node_remove_ordered(
     const _Compare &, const _Range_Preprocess &, const _Range_Combine &,
     _Alloc);
 
+template <typename _Element_2, typename _Size_2, typename _Range_Type_Intermediate_2,
+          typename _Merge, typename _Range_Preprocess, typename _Range_Combine,
+          typename _Alloc>
+std::pair<avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *, bool>
+avl_node_replace_at_index(
+    avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *, _Size_2,
+    _Element_2, const _Merge &, const _Range_Preprocess &,
+    const _Range_Combine &, _Alloc);
+
+template <typename _Element_2, typename _Size_2, typename _Range_Type_Intermediate_2,
+          typename _Compare, typename _Merge,
+          typename _Range_Preprocess, typename _Range_Combine,
+          typename _Alloc>
+std::tuple<avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *, bool, bool>
+avl_node_replace_ordered(
+    avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *, _Element_2,
+    _Element_2, const _Compare &,
+    const _Merge &, const _Range_Preprocess &,
+    const _Range_Combine &, _Alloc);
+
 // declaration for avl_node
 
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
@@ -287,6 +307,9 @@ class avl_node {
       avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *, _Element_2,
       const _Compare &, const _Range_Preprocess &, const _Range_Combine &,
       _Alloc);
+
+  // avl_node_replace_at_index does not need friend
+  // avl_node_replace_ordered does not need friend
 
   // these are our methods
 
@@ -796,6 +819,62 @@ avl_node_remove_ordered(
   }
 }
 
+/**
+ * Removes the node at a certain index,
+ * then inserts a new node at that index.
+ * Insertion may cause a merge, in which case the tree size decreasees by 1.
+ * Return tuple is (new subtree root, whether the merge was successful).
+ */
+template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
+          typename _Merge, typename _Range_Preprocess, typename _Range_Combine,
+          typename _Alloc>
+std::pair<avl_node<_Element, _Size, _Range_Type_Intermediate> *, bool>
+avl_node_replace_at_index(
+    avl_node<_Element, _Size, _Range_Type_Intermediate> *node, _Size index,
+    _Element new_value, const _Merge &_merge, const _Range_Preprocess &_rpre,
+    const _Range_Combine &_rcomb, _Alloc _alloc) {
+    auto old_size = avl_node_size(node);
+    auto remove_result = avl_node_remove_at_index(node, index, _rpre, _rcomb, _alloc);
+    node = std::get<0>(remove_result);
+    auto insert_result = avl_node_insert_at_index(node, index, new_value, _merge, _rpre, _rcomb, _alloc);
+    node = std::get<0>(insert_result);
+    auto new_size = avl_node_size(node);
+    bool did_merge = old_size != new_size;
+    return std::make_pair(node, did_merge);
+}
+
+/**
+ * If the requested old value exists in the tree, replace it by the
+ * new value, otherwise, do nothing.
+ * The re-insertion may cause a merge, in which case the tree size decreasees by 1.
+ * Return tuple is (new subtree root, whether a replacement was made,
+ * whether the merge was successful).
+ */
+template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
+          typename _Compare, typename _Merge,
+          typename _Range_Preprocess, typename _Range_Combine,
+          typename _Alloc>
+std::tuple<avl_node<_Element, _Size, _Range_Type_Intermediate> *, bool, bool>
+avl_node_replace_ordered(
+    avl_node<_Element, _Size, _Range_Type_Intermediate> *node, _Element old_value,
+    _Element new_value, const _Compare &_less,
+    const _Merge &_merge, const _Range_Preprocess &_rpre,
+    const _Range_Combine &_rcomb, _Alloc _alloc) {
+    auto old_size = avl_node_size(node);
+    auto remove_result = avl_node_remove_ordered(node, old_value, _less, _rpre, _rcomb, _alloc);
+    avl_optional<_Size> remove_index = std::get<2>(remove_result);
+    // if remove failed, do nothing
+    if(!remove_index){
+      return std::make_tuple(node, false, false);
+    }
+    node = std::get<0>(remove_result);
+    auto insert_result = avl_node_insert_at_index(node, *remove_index, new_value, _merge, _rpre, _rcomb, _alloc);
+    node = std::get<0>(insert_result);
+    auto new_size = avl_node_size(node);
+    bool did_merge = old_size != new_size;
+    return std::make_tuple(node, true, did_merge);
+}
+
 // the avl tree class
 
 template <typename _Element, typename _Element_Compare = std::less<_Element>,
@@ -876,4 +955,26 @@ int main() {
   // test some element get
   // (100)
   std::cout << avl::avl_node_get_at_index(node, 0) << " (expected 100)" << std::endl;
+  // test some element replace by index
+  // (150)
+  node = std::get<0>(avl::avl_node_replace_at_index(
+      node, 0, 150, avl::no_merge<int>(), avl::identity<int>(),
+      std::plus<int>(), std::allocator<avl::avl_node<int, int, int>>()
+      ));
+  std::cout << avl::avl_node_get_at_index(node, 0) << " (expected 150)" << std::endl;
+  std::cout << avl::avl_node_size(node) << " (expected 1)" << std::endl;
+  // test some element replace ordered
+  // (150)
+  node = std::get<0>(avl::avl_node_replace_ordered(
+      node, 250, 350, std::less<int>(), avl::no_merge<int>(), avl::identity<int>(),
+      std::plus<int>(), std::allocator<avl::avl_node<int, int, int>>()
+      ));
+  std::cout << avl::avl_node_get_at_index(node, 0) << " (expected 150)" << std::endl;
+  std::cout << avl::avl_node_size(node) << " (expected 1)" << std::endl;
+  node = std::get<0>(avl::avl_node_replace_ordered(
+      node, 150, 350, std::less<int>(), avl::no_merge<int>(), avl::identity<int>(),
+      std::plus<int>(), std::allocator<avl::avl_node<int, int, int>>()
+      ));
+  std::cout << avl::avl_node_get_at_index(node, 0) << " (expected 350)" << std::endl;
+  std::cout << avl::avl_node_size(node) << " (expected 1)" << std::endl;
 }
