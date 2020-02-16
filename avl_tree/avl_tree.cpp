@@ -1,27 +1,4 @@
-/*
- * An AVL tree implementation and some common collection types based on it.
- * Includes drop-in replacements for vector, set, multiset, and map.
- * This AVL tree implementation can support additional features optionally:
- * - Indexable
- * - Ordered
- * - Range queries
- * Note that the compiler may require you implement certain things even if
- * that code will never be run.
- * How to use range queries:
- * - Elements will first individually be preprocessed, then combined left to
- * right, then the result is postprocessed.
- * - Combine must be associative.
- * How to use merge:
- * - Merge will either merge 2 entries and return true or do nothing and return
- * false.
- * - Left argument to merge is the "merge target", and will be kept if merged.
- * The right argument would be discarded. Possible weird behaviour:
- * - Indexing relies on the same stuff as sizing, so if the tree is not made
- * indexable, you also will not know its size Also note that various operations
- * are assumed to be O(1) such as the range combine. If the complexity is not
- * O(1), it's up to you to determine the actual complexity in any complexity
- * analysis.
- */
+// AVL tree library. See documentation and README for more information.
 
 #ifndef _AVL_TREE_H
 #define _AVL_TREE_H
@@ -47,9 +24,41 @@
 #define avl_optional std::experimental::optional
 #endif
 
+//! AVL tree library with an extensible AVL tree class.
+/*!
+ * An AVL tree implementation and some common collection types based on it.
+ * Includes drop-in replacements for vector, set, multiset, and map.
+ *
+ * This AVL tree implementation can support additional features optionally:
+ * - Indexable
+ * - Ordered
+ * - Range queries
+ *
+ * Note that the compiler may require you implement certain things even if
+ * that code will never be run.
+ *
+ * How to use range queries:
+ * - Elements will first individually be preprocessed, then combined left to
+ * right, then the result is postprocessed.
+ * - Combine must be associative.
+ *
+ * How to use merge:
+ * - Merge will either merge 2 entries and return true or do nothing and return
+ * false.
+ * - Left argument to merge is the "merge target", and will be kept if merged.
+ * The right argument would be discarded.
+ *
+ * Possible weird behaviour:
+ * - Indexing relies on the same stuff as sizing, so if the tree is not made
+ * indexable, you also will not know its size Also note that various operations
+ * are assumed to be O(1) such as the range combine. If the complexity is not
+ * O(1), it's up to you to determine the actual complexity in any complexity
+ * analysis.
+ */
 namespace avl {
 
-/**
+//! Empty 0 sized struct, which has only 1 possible state, hence the name.
+/*!
  * The empty 0 sized struct.
  * There's lots of reimplementations of this struct out there,
  * and this one defines various operations for completeness.
@@ -105,7 +114,8 @@ monostate const operator&(const monostate &lhs, const monostate &rhs) noexcept {
   return monostate();
 }
 
-/**
+//! Ad-hoc identity function object.
+/*!
  * Identity function. It's in std::functional as of C++20, but it's currently
  * 2019 and support is still on its way. For the time being, we use this as a
  * drop-in replacement. It's semantically not exactly the same (this one is
@@ -116,8 +126,11 @@ struct identity {
   const T &operator()(const T &value) const noexcept { return value; }
 };
 
-/**
- * One of the basic mergers: never merges
+//! A basic merger: Never merge.
+/*!
+ * One of the basic mergers: never merges.
+ * May be useful for implementing a simple list
+ * which does not care about duplicates.
  */
 template <typename T>
 struct no_merge {
@@ -129,8 +142,10 @@ const bool no_merge<T>::operator()(T &to, const T &from) const {
   return false;
 }
 
-/**
- * One of the basic mergers: merge if equal
+//! A basic merger: merge if equal, and do nothing.
+/*!
+ * One of the basic mergers: merge if equal, and do nothing.
+ * May be useful for implementing a simple set which does not allow duplicates elements.
  */
 template <typename T>
 struct merge_if_equal {
@@ -142,8 +157,12 @@ const bool merge_if_equal<T>::operator()(T &to, const T &from) const {
   return to == from;
 }
 
-/**
- * One of the less basic mergers: if equal, merge counter
+//! A less basic merger: merge if the first of the pair is equal, and add the second of the pair.
+/*!
+ * One of the less basic mergers: if the key (first of the pair) is equal,
+ * merge, and combine the counters (second of the pair).
+ * May be useful for implementing a simple multiset/bag
+ * which compactly represents duplicates as the element and a counter.
  */
 template <typename T, typename C>
 struct merge_count {
@@ -224,7 +243,7 @@ template <typename _Element_2, typename _Size_2, typename _Range_Type_Intermedia
           typename _Compare, typename _Merge,
           typename _Range_Preprocess, typename _Range_Combine,
           typename _Alloc>
-std::tuple<avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *, bool, bool>
+std::tuple<avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *, bool, avl_optional<std::pair<_Size_2,_Size_2>>>
 avl_node_replace_ordered(
     avl_node<_Element_2, _Size_2, _Range_Type_Intermediate_2> *, _Element_2,
     _Element_2, const _Compare &,
@@ -233,17 +252,70 @@ avl_node_replace_ordered(
 
 // declaration for avl_node
 
+//! AVL tree node; for internal use.
+/*!
+ * Represents a single AVL tree node.
+ * Stores left and right child pointers, the actual data element,
+ * the subtree's size (number of nodes contained), the balance factor,
+ * and the intermediate range value.
+ * Designated for internal use; to enforce this,
+ * data members are private and only exposed through the helper functions
+ * which work on the tree at a higher level.
+ * It's intentional that end users can see the class (they need it for type declarations),
+ * but those users aren't meant to manipulate the nodes directly.
+ * Subtrees are represented as pointers to nodes,
+ * with the null pointer being an empty subtree.
+ */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 class avl_node {
  private:
+  //! Left child pointer.
+  /*!
+   * Pointer to the left child at this node.
+   */
   avl_node *left;
+ private:
+  //! Value of this node.
+  /*!
+   * The single value of this node.
+   * May also be called the data value or label.
+   */
   [[no_unique_address]] _Element value;
+ private:
+  //! Right child pointer.
+  /*!
+   * Pointer to the right child at this node.
+   */
   avl_node *right;
+  //! Size of the subtree rooted at this node.
+  /*!
+   * The size (number of nodes contained) of the subtree rooted at this node.
+   */
   [[no_unique_address]] _Size size;
+  //! Balance factor of this node.
+  /*!
+   * The "balance factor" of this node in the AVL tree.
+   * Balance factors are used for memory efficient (better than storing the height) implementations of AVL trees.
+   * The balance factor is always either -1, 0, or 1, equal to the height of the right subtree minus the height of the left subtree.
+   */
   char balance;
+  //! Range intermediate value for this subtree.
+  /*!
+   * The range intermediate value for this subtree.
+   * Used for range operations.
+   *
+   * \sa avl_tree
+   */
   [[no_unique_address]] _Range_Type_Intermediate subrange;
 
  public:
+  //! Construct from data.
+  /*!
+   * Construct a lone node given an element and range intermediate value.
+   * Other data members are set automatically to match those of a single node with no children.
+   * \param i_value the element value
+   * \param i_subrange the range intermediate value for just this element
+   */
   avl_node(const _Element &i_value,
            const _Range_Type_Intermediate &i_subrange) {
     left = nullptr;
@@ -335,9 +407,13 @@ class avl_node {
                                  const _Range_Combine &_rcomb);
 };
 
-/**
+//! Get the size of the subtree.
+/*!
  * Get the number of nodes in a subtree.
  * A subtree represented by the null pointer is an empty tree, so its size is 0.
+ *
+ * \param node the node to get the size of
+ * \return how many nodes are in the subtree
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 _Size avl_node_size(avl_node<_Element, _Size, _Range_Type_Intermediate> *node) {
@@ -345,9 +421,14 @@ _Size avl_node_size(avl_node<_Element, _Size, _Range_Type_Intermediate> *node) {
   return node->size;
 }
 
-/**
+//! Update size and range intermediate values at this node.
+/*!
  * Updates size and range intermediate values at this node. Assumes its children
  * (if they exist) already have correct values.
+ *
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \sa avl_tree
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 template <typename _Range_Preprocess, typename _Range_Combine>
@@ -365,12 +446,18 @@ void avl_node<_Element, _Size, _Range_Type_Intermediate>::update(
   }
 }
 
-/**
+//! Perform a left rotation on this subtree, and return the new root.
+/*!
  * Performs a left rotation on this subtree.
  * Will also update the sizes and range intermediate values, so if you know a
  * tree rotation is needed, you can avoid explicitly calling update (the freshly
  * updated values would have been discarded anyway, and this method will make
  * the correct updates after performing the rotation)
+ *
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \return the new subtree root
+ * \sa avl_tree
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 template <typename _Range_Preprocess, typename _Range_Combine>
@@ -387,7 +474,8 @@ avl_node<_Element, _Size, _Range_Type_Intermediate>
   return pivot;
 }
 
-/**
+//! Perform a right rotation on this subtree, and return the new root.
+/*!
  * The mirrored version of rotate_left. See docs for rotate_left.
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
@@ -405,9 +493,15 @@ avl_node<_Element, _Size, _Range_Type_Intermediate>
   return pivot;
 }
 
-/**
+//! Ensure this subtree is not right heavy, and rotates if needed. Returns the new root.
+/*!
  * If the subtree is right heavy (right subtree is taller than left), does a
  * left rotation to make it not right heavy anymore.
+ *
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \return the new subtree root
+ * \sa avl_tree
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 template <typename _Range_Preprocess, typename _Range_Combine>
@@ -418,7 +512,8 @@ avl_node<_Element, _Size, _Range_Type_Intermediate>::ensure_not_right_heavy(
   return this->rotate_left(_rpre, _rcomb);
 }
 
-/**
+//! Ensure this subtree is not left heavy, and rotates if needed. Returns the new root.
+/*!
  * Mirrored version of ensure_not_right_heavy.
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
@@ -430,9 +525,14 @@ avl_node<_Element, _Size, _Range_Type_Intermediate>
   return this->rotate_right(_rpre, _rcomb);
 }
 
-/**
+//! Knowing that this node's balance factor is 2 (very right heavy), rotate to correct the imbalance, and return the new root.
+/*!
  * Rebalances the tree when the only imbalance is at this node and its balance
  * factor is 2. (overly right heavy)
+ *
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \sa avl_tree
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 template <typename _Range_Preprocess, typename _Range_Combine>
@@ -444,7 +544,8 @@ avl_node<_Element, _Size, _Range_Type_Intermediate>
   return this->rotate_left(_rpre, _rcomb);
 }
 
-/**
+//! Knowing that this node's balance factor is -2 (very left heavy), rotate to correct the imbalance, and return the new root.
+/*!
  * Mirrored version of rebalance_right_heavy.
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
@@ -457,12 +558,14 @@ avl_node<_Element, _Size, _Range_Type_Intermediate>
   return this->rotate_right(_rpre, _rcomb);
 }
 
-/**
- * Gets the element at a specific index.
- * (actually, returns a const reference to the element)
+//! Get the element at a specific index in the subtree.
+/*!
+ * Get (a const reference to) the element at a specific index.
  *
- * Valid range is [0, size of tree)
- * If the index is outside the valid range, throws a std::out_of_range
+ * \param node root of the subtree, which must not be null
+ * \param node index to get the element of, in range [0, size of tree)
+ * \return (a const reference to) the element at that index
+ * \exception std::out_of_range If the requested index is outside the range [0, size of subtree)
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate>
 const _Element&
@@ -487,15 +590,27 @@ avl_node_get_at_index(
   }
 }
 
+//! Insert an element just before the given index in the subtree.
 /**
- * Inserts the element just before the element at a specific index.
- * May merge, in which case the tree does not grow.
- * Return tuple is (new root, whether it got taller)
+ * Inserts the new element just at the given index.
+ * To be specific, if there is some element already at that index,
+ * then the new element will be directly before that other element.
+ * To insert after the current last element, use (the size of the subtree)
+ * as the index.
  *
- * Valid range is [0, size of tree + 1)
- * 0 would be just before the first element,
- * and (size of tree + 1) would be just after the last element.
- * If the index is outside the valid range, throws a std::out_of_range
+ * The size of the subtree increases, unless a merge occurs,
+ * in which case the size of the subtree stays the same.
+ *
+ * \param node the root of the subtree
+ * \param index the index to insert at
+ * \param value the value to be inserted at that index
+ * \param _merge merge function
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \param _alloc allocator object
+ * \return tuple: (new subtree root, whether it got taller)
+ * \sa avl_tree
+ * \exception std::out_of_range If the requested insertion index is outside the range [0, size of subtree + 1)
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
           typename _Merge, typename _Range_Preprocess, typename _Range_Combine,
@@ -555,13 +670,33 @@ avl_node_insert_at_index(
   }
 }
 
-/**
- * Inserts the element where it belongs using the given less than function
- * (compare). This could be done in separate stages with finding the insertion
- * index and then inserting there, but a fused find and insert is faster.
- * Insertion index will be the leftmost possible, so it will be to the left of
- * all identical values. Return type is (new root, whether it got taller,
- * insertion index used)
+//! Insert a new element in the subtree just after all elements that are less than it.
+/*!
+ * Insert a new element in the subtree just after all elements that are less than it.
+ * As currently implemented, elements which are equivalent or incomparable are considered
+ * greater than the new element being inserted
+ * for purposes of determining where to insert,
+ * though it is only required that the new value is inserted after all elements less than it
+ * and before all elements greater than it.
+ * It is required as a precondition that the subtree is already sorted in ascending order,
+ * that is, for all pairs of elements, the left element is not greater than the right element.
+ *
+ * The size of the subtree increases, unless a merge occurs,
+ * in which case the size of the subtree stays the same.
+ *
+ * One of the return values is the insertion index,
+ * which is the index of the newly inserted value,
+ * or if it was merged, the index of the merged value.
+ *
+ * \param node the root of the subtree
+ * \param value the value to be inserted
+ * \param _less less than function
+ * \param _merge merge function
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \param _alloc allocator object
+ * \return tuple: (new subtree root, whether it got taller, index of the inserted value)
+ * \sa avl_tree
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
           typename _Compare, typename _Merge, typename _Range_Preprocess,
@@ -617,13 +752,18 @@ avl_node_insert_ordered(
   }
 }
 
-/**
- * Remove the node at a certain index.
- * Return tuple is (root of the subtree, whether it got shorter, the removed
- * value)
+//! Remove a node at a specific index in the subtree.
+/*!
+ * Remove an element at a specific index, and return the element that was removed.
  *
- * Valid range is [0, size of tree)
- * If the index is outside the valid range, throws a std::out_of_range
+ * \param node the root of the subtree
+ * \param index the index of the element to remove
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \param _alloc allocator object
+ * \return tuple: (new subtree root, whether it got shorter, the removed element)
+ * \sa avl_tree
+ * \exception std::out_of_range If the requested removal index is outside the range [0, size of subtree)
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
           typename _Range_Preprocess, typename _Range_Combine, typename _Alloc>
@@ -715,11 +855,32 @@ avl_node_remove_at_index(
   }
 }
 
-/**
- * Tries to remove one instance of an item in a sorted collection.
- * Return tuple is (new subtree root, whether it got shorter, the index where
- * the item was if it was removed) The optional allows to signal a successful or
- * failed removal operation and also carry information on the index.
+//! Attempt to remove 1 instance of an element from a sorted subtree.
+/*!
+ * Searches for 1 instance of an element within a sorted (non-decreasing) subtree,
+ * and if it is found, removes it.
+ * Exact equality using the == operator is required.
+ * Note that if the search value is within a contiguous subrange of at least 2
+ * incomparable elements, the search may be unable to locate it.
+ * This is because the search assumes a total ordering, and will not bother
+ * searching in an incomparable subrange.
+ *
+ * If you instead want to find and possibly remove an incomparable element which may
+ * not be exactly equal, try using the search methods instead, which are meant for searching
+ * rather than removing a very specific value.
+ *
+ * One of the return values is the index of the element (before it was removed).
+ * If the remove was successful, that value will be the actual index,
+ * otherwise, it will be the empty optional.
+ *
+ * \param node the root of the subtree
+ * \param value the value to search for and remove
+ * \param _less less than function
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \param _alloc allocator object
+ * \return tuple: (new subtree root, whether it got shorter, optional: the index of the removed element)
+ * \sa avl_tree
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
           typename _Compare, typename _Range_Preprocess,
@@ -819,11 +980,23 @@ avl_node_remove_ordered(
   }
 }
 
-/**
- * Removes the node at a certain index,
- * then inserts a new node at that index.
- * Insertion may cause a merge, in which case the tree size decreasees by 1.
- * Return tuple is (new subtree root, whether the merge was successful).
+//! Removes a node at the specified index in the subtree, then inserts the new element at that index.
+/*!
+ * Removes a node at the specified index, then inserts the new element at that index.
+ *
+ * The size of the subtree stays the same, unless a merge occurs, in which case
+ * the size of the subtree decreases by 1.
+ *
+ * \param node the root of the subtree
+ * \param index the index to replace at
+ * \param new_value the new value to insert at that index
+ * \param _merge merge function
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \param _alloc allocator object
+ * \return tuple: (new subtree root, whether it got smaller)
+ * \sa avl_tree
+ * \exception std::out_of_range If the requested insertion index is outside the range [0, size of subtree)
  */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
           typename _Merge, typename _Range_Preprocess, typename _Range_Combine,
@@ -850,11 +1023,36 @@ avl_node_replace_at_index(
  * Return tuple is (new subtree root, whether a replacement was made,
  * whether the merge was successful).
  */
+//! Make a single replacement in the subtree if the value exists, otherwise do nothing.
+/**
+ * Search for the old element within the subtree, assuming sorted order,
+ * and remove it if it exists. If the removal was successful, then inserts the new element
+ * in the subtree according to the order. The removal index and insertion index are not necessarily the same.
+ * Size of the subtree remains the same, unless replacement occurs and merge occurs.
+ *
+ * One of the return values is an optional tuple of the removal index and the insertion index.
+ * It exists if the replacement is successful.
+ * Note that if the insertion index is less than or equal to the removal index and no merge occurs,
+ * the actual location where the removal occured is shifted to the right by 1.
+ * This function includes correction for this shifting, and reports this actual location, instead of
+ * where in the original subtree the removal occurred.
+ *
+ * \param node the root of the subtree
+ * \param old_value the old value to search for and replace
+ * \param new_value the new value to insert at that index
+ * \param _less less than function
+ * \param _merge merge function
+ * \param _rpre range preprocess function
+ * \param _rcomb range combine function
+ * \param _alloc allocator object
+ * \return tuple: (new subtree root, whether it got smaller, optional: (removal index, insertion index))
+ * \sa avl_tree
+ */
 template <typename _Element, typename _Size, typename _Range_Type_Intermediate,
           typename _Compare, typename _Merge,
           typename _Range_Preprocess, typename _Range_Combine,
           typename _Alloc>
-std::tuple<avl_node<_Element, _Size, _Range_Type_Intermediate> *, bool, bool>
+std::tuple<avl_node<_Element, _Size, _Range_Type_Intermediate> *, bool, avl_optional<std::pair<_Size,_Size>>>
 avl_node_replace_ordered(
     avl_node<_Element, _Size, _Range_Type_Intermediate> *node, _Element old_value,
     _Element new_value, const _Compare &_less,
@@ -863,20 +1061,77 @@ avl_node_replace_ordered(
     auto old_size = avl_node_size(node);
     auto remove_result = avl_node_remove_ordered(node, old_value, _less, _rpre, _rcomb, _alloc);
     avl_optional<_Size> remove_index = std::get<2>(remove_result);
+    avl_optional<std::pair<_Size,_Size>> index_result;
     // if remove failed, do nothing
     if(!remove_index){
-      return std::make_tuple(node, false, false);
+      return std::make_tuple(node, false, index_result);
     }
     node = std::get<0>(remove_result);
-    auto insert_result = avl_node_insert_at_index(node, *remove_index, new_value, _merge, _rpre, _rcomb, _alloc);
+    auto insert_result = avl_node_insert_ordered(node, new_value, _less, _merge, _rpre, _rcomb, _alloc);
     node = std::get<0>(insert_result);
     auto new_size = avl_node_size(node);
     bool did_merge = old_size != new_size;
-    return std::make_tuple(node, true, did_merge);
+    _Size corrected_remove_index = *remove_index;
+    _Size insert_index = std::get<2>(insert_result);
+    corrected_remove_index += _Size(insert_index <= corrected_remove_index && !did_merge);
+    index_result = std::make_pair(corrected_remove_index, insert_index);
+    return std::make_tuple(node, did_merge, index_result);
 }
 
 // the avl tree class
 
+//! The AVL tree class, the most basic and extensible data structure in the public API.
+/*!
+ * The AVL tree class which is actually exposed to the user and encapsulates a lot of the
+ * messy details involved in the implementation. The base extendable data structure on top
+ * of which more useful objects are built.
+ *
+ * To demonstrate use of the range queries, consider an implementation of a simple list
+ * which also wants O(log N) hashing of sublists. We will use range queries here to implement only hashing.
+ * Whatever the element type, we will use range preprocess as
+ * X --> (hash(X), 1). Intermediate values will be tuples of (hash for this range, number of elements in the range).
+ * Hashes will be combined using the Rabin hash, so this is the range combine:
+ * (U, N), (V, M) --> (P ^ N * U + V, N + M) for some odd multiplier P, using ^ to denote exponentiation.
+ * Finally, we want to return a single number as the hash, so the hash postprocess will simply drop the element count:
+ * (U, N) --> U
+ *
+ * \tparam _Element The type of the element stored in the tree collection.
+ * To differentiate it from other data, you may think of the "elements" as the original data.
+ * Without the elements, it's just a plain tree and not useful.
+ * \tparam _Element_Compare A class for a function that takes 2 elements and returns true if the
+ * left argument is less than the right argument. You will only actually need this for methods
+ * which care about the ordering, otherwise, you don't need to have this actually implemented at all.
+ * As a consequence of how templating works in C++, if you never use those ordered functions,
+ * the type-specific code will never be generated, so the compiler won't notice that the comparison function supplied
+ * doesn't actually work.
+ * In the future, with good reason, a major update
+ * may change this to use a 3-way comparison function.
+ * \tparam _Size The integer or integer-like type used for indices and sizes.
+ * Recommended to use std::size_t (which is the default) unless you have a good reason
+ * to use another type.
+ * \tparam _Merge A class for a function that takes 2 element references, and tries to merge the right
+ * argument into the left argument. It will either return false and leave both arguments unchanged, or return true and
+ * combine the right argument with the left argument in some way. The actual behaviour of the merge depends
+ * on what merger you use, and this will depend on your needs. The left argument is kept in place, and if the merge
+ * is successful, the right argument will be discarded, so a destructive merge operation is okay.
+ * \tparam _Range_Preprocess A class for a function, designated the range preprocess function.
+ * For range operations, all elements will individually be mapped first through this function,
+ * to get an object of type _Range_Type_Intermediate.
+ * Often necessary because the intermediate value type differs from the element type
+ * and some conversion work is needed.
+ * \tparam _Range_Type_Intermediate The type of intermediate results of range operations.
+ * \tparam _Range_Combine A class for a function, designated the range combine function.
+ * Represents the binary operator that combines 2 _Range_Type_Intermediate values into 1.
+ * Assumed to be associative, otherwise, the result of a range operation is ill defined.
+ * Only requires associativity, not commutativity or invertability.
+ * \tparam _Range_Postprocess A class for a function, designated the range postprocess function.
+ * After computing the intermediate value for a range, that intermediate value is mapped through the
+ * range postprocess function to get the final result of the range query.
+ * A typical use of this is to drop information that is only relevant for intermediate values.
+ * \tparam _Alloc The allocator class for the nodes, which will be used for managing dynamic memory in place
+ * of using new and delete. By default, is the default allocator, which actually has the same behaviour as new and delete.
+ * If you want more control over how the nodes, you can change this.
+ */
 template <typename _Element, typename _Element_Compare = std::less<_Element>,
           typename _Size = std::size_t, typename _Merge = no_merge<_Element>,
           typename _Range_Preprocess = monostate,
